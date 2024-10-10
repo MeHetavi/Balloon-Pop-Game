@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color Pop Frenzy</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sixtyfour+Convergence&display=swap" rel="stylesheet">
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Sixtyfour Convergence', Arial, sans-serif;
+            /* Updated font */
+        }
+
+        #game-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(to bottom, #87CEEB, #E0F6FF);
+        }
+
+        .screen {
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        #start-screen {
+            display: flex;
+        }
+
+        #game-screen,
+        #end-screen {
+            opacity: 0;
+        }
+
+        h1 {
+            font-size: 3em;
+            color: #FF4500;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            font-family: 'Sixtyfour Convergence', Arial, sans-serif;
+            /* Updated font */
+        }
+
+        #instructions {
+            margin: 20px 0;
+            font-size: 1.2em;
+            color: #333;
+            font-family: 'Sixtyfour Convergence', Arial, sans-serif;
+            /* Updated font */
+        }
+
+        button {
+            font-size: 1.5em;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            font-family: 'Sixtyfour Convergence', Arial, sans-serif;
+            /* Updated font */
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.2em;
+            color: #333;
+            font-family: 'Sixtyfour Convergence', Arial, sans-serif;
+            /* Updated font */
+        }
+
+        #thumbnail {
+            width: 200px;
+            height: auto;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2em;
+            }
+
+            #instructions {
+                font-size: 1em;
+            }
+
+            button {
+                font-size: 1.2em;
+            }
+
+            #hud {
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="game-container">
+        <div id="start-screen" class="screen">
+            <img id="thumbnail" src="assets/thumbnail.png" alt="Color Pop Frenzy Thumbnail">
+            <h1>Color Pop Frenzy</h1>
+            <div id="instructions">
+                <p>Pop as many balloons as you can in 60 seconds!</p>
+                <p>Different colors are worth different points:</p>
+                <p>Red: 10, Blue: 20, Green: 30, Yellow: 40, Purple: 50</p>
+                <p>Click or tap to pop balloons</p>
+                <p>Watch out for faster and erratic balloons as time passes!</p>
+            </div>
+            <button id="start-button">Start Game</button>
+        </div>
+        <div id="game-screen" class="screen">
+            <div id="hud">
+                <div id="score">Score: 0</div>
+                <div id="high-score">High Score: 0</div>
+                <div id="timer">Time: 60s</div>
+            </div>
+        </div>
+        <div id="end-screen" class="screen">
+            <h1>Game Over</h1>
+            <div id="final-score">Your Score: 0</div>
+            <div id="end-high-score">High Score: 0</div>
+            <button id="replay-button">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        class ColorPopFrenzy extends Phaser.Scene {
+            constructor() {
+                super('ColorPopFrenzy');
+                this.score = 0;
+                this.highScore = 0;
+                this.timeRemaining = 60;
+                this.balloons = null;
+                this.spawnRate = 1000;
+                this.balloonSpeed = 100;
+                this.colors = [
+                    { name: 0xFF0000, points: 10 },
+                    { name: 0x0000FF, points: 20 },
+                    { name: 0x00FF00, points: 30 },
+                    { name: 0xFFFF00, points: 40 },
+                    { name: 0x800080, points: 50 }
+                ];
+                this.sizes = [
+                    { name: 'small', scale: 0.8 },
+                    { name: 'medium', scale: 1.0 },
+                    { name: 'large', scale: 1.2 }
+                ];
+            }
+
+            preload() {
+                this.load.image('balloon', 'assets/balloon.png');
+                this.load.image('spark', 'assets/spark.png'); // Load a spark image
+                this.load.image('background', 'assets/background.png');
+                // Remove the burst atlas if not needed
+                // this.load.atlas('burst', 'assets/burst.png', 'assets/burst.json');
+            }
+
+            create() {
+                this.add.image(400, 300, 'background');
+                this.balloons = this.physics.add.group();
+                this.input.on('pointerdown', this.popBalloon, this);
+
+                this.time.addEvent({
+                    delay: 1000,
+                    callback: this.updateTimer,
+                    callbackScope: this,
+                    loop: true
+                });
+
+                this.time.addEvent({
+                    delay: 10000,
+                    callback: this.increaseSpawnRate,
+                    callbackScope: this,
+                    loop: true
+                });
+
+                this.time.addEvent({
+                    delay: 15000,
+                    callback: this.increaseBalloonSpeed,
+                    callbackScope: this,
+                    loop: true
+                });
+
+                // New event to increase balloon speed every 30 seconds
+                this.time.addEvent({
+                    delay: 30000, // Increase speed every 30 seconds
+                    callback: this.increaseBalloonSpeed,
+                    callbackScope: this,
+                    loop: true
+                });
+
+                this.spawnBalloon();
+
+                this.highScore = localStorage.getItem('colorPopFrenzyHighScore') || 0;
+                this.updateHUD();
+
+                this.particles = this.add.particles('spark'); // Create a particle emitter using spark image
+            }
+
+            update() {
+                this.balloons.getChildren().forEach(balloon => {
+                    if (balloon.y < -balloon.height) {
+                        balloon.destroy();
+                    }
+
+                    // Remove the erratic movement logic
+                    // if (this.timeRemaining <= 30) {
+                    //     this.applyErraticMovement(balloon);
+                    // }
+                });
+            }
+
+            spawnBalloon() {
+                const x = Phaser.Math.Between(0, this.sys.game.config.width);
+                const y = this.sys.game.config.height + 50;
+
+                const colorData = Phaser.Utils.Array.GetRandom(this.colors);
+                const sizeData = Phaser.Utils.Array.GetRandom(this.sizes);
+
+                const balloon = this.balloons.create(x, y, 'balloon');
+                balloon.setTint(colorData.name);
+                balloon.setScale(sizeData.scale);
+                balloon.setData('points', colorData.points);
+
+                // Set the vertical velocity to make the balloon move downwards
+                balloon.setVelocityY(-this.balloonSpeed);
+
+                this.time.addEvent({
+                    delay: this.spawnRate,
+                    callback: this.spawnBalloon,
+                    callbackScope: this
+                });
+            }
+
+            popBalloon(pointer) {
+                const clickedBalloon = this.balloons.getChildren().find(balloon =>
+                    Phaser.Geom.Intersects.CircleToRectangle(
+                        new Phaser.Geom.Circle(pointer.x, pointer.y, 1),
+                        balloon.getBounds()
+                    )
+                );
+
+                if (clickedBalloon) {
+                    this.score += clickedBalloon.getData('points');
+                    this.showScoreText(clickedBalloon.x, clickedBalloon.y, clickedBalloon.getData('points'));
+
+                    // Play burst animation
+                    this.playBurstAnimation(clickedBalloon.x, clickedBalloon.y);
+
+                    clickedBalloon.destroy();
+                    this.updateHUD();
+                }
+            }
+
+            playBurstAnimation(x, y) {
+                const burst = this.particles.createEmitter({
+                    speed: { min: 200, max: 400 }, // Increased speed for a spark effect
+                    scale: { start: 0.1, end: 0 }, // Adjusted scale for smaller spark size
+                    lifespan: 300, // Shorter lifespan for quick bursts
+                    gravityY: 0, // No gravity for a more explosive effect
+                    x: x,
+                    y: y,
+                    quantity: 15, // More particles for a more dramatic effect
+                    blendMode: 'ADD', // Additive blending for a spark effect
+                    alpha: { start: 1, end: 0 } // Fade out particles for better visibility
+                });
+
+                burst.explode(15, x, y); // Explode particles at the balloon's position
+            }
+
+            showScoreText(x, y, points) {
+                const scoreText = this.add.text(x, y, `+${points}`, { fontSize: '24px', fill: '#ffffff', fontFamily: 'Sixtyfour Convergence, Arial, sans-serif' });
+                this.tweens.add({
+                    targets: scoreText,
+                    y: y - 50,
+                    alpha: 0,
+                    duration: 1000,
+                    onComplete: () => scoreText.destroy()
+                });
+            }
+
+            updateTimer() {
+                this.timeRemaining--;
+                if (this.timeRemaining <= 0) {
+                    this.endGame();
+                }
+                this.updateHUD();
+            }
+
+            increaseSpawnRate() {
+                this.spawnRate = Math.max(100, this.spawnRate - 100);
+            }
+
+            increaseBalloonSpeed() {
+                this.balloonSpeed += 10;
+                this.balloons.getChildren().forEach(balloon => {
+                    balloon.setVelocityY(-this.balloonSpeed);
+                });
+            }
+
+            applyErraticMovement(balloon) {
+                const time = this.time.now * 0.001;
+                const xOffset = Math.sin(time * 5) * 2;
+                balloon.x += xOffset;
+                const randomDirection = Phaser.Math.Between(-1, 1); // Randomly choose a direction
+                balloon.setVelocityX(randomDirection * 50); // Set a random horizontal velocity
+            }
+
+            updateHUD() {
+                document.getElementById('score').textContent = `Score: ${this.score}`;
+                document.getElementById('high-score').textContent = `High Score: ${this.highScore}`;
+                document.getElementById('timer').textContent = `Time: ${this.timeRemaining}s`;
+            }
+
+            endGame() {
+                if (this.score > this.highScore) {
+                    this.highScore = this.score;
+                    localStorage.setItem('colorPopFrenzyHighScore', this.highScore);
+                }
+
+                document.getElementById('final-score').textContent = `Your Score: ${this.score}`;
+                document.getElementById('end-high-score').textContent = `High Score: ${this.highScore}`;
+
+                document.getElementById('game-screen').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('game-screen').style.display = 'none';
+                    document.getElementById('end-screen').style.display = 'flex';
+                    setTimeout(() => {
+                        document.getElementById('end-screen').style.opacity = '1';
+                    }, 50);
+                }, 500);
+
+                this.scene.stop();
+            }
+        }
+
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            parent: 'game-screen',
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 0 },
+                    debug: false
+                }
+            },
+            scene: ColorPopFrenzy
+        };
+
+        const game = new Phaser.Game(config);
+
+        document.getElementById('start-button').addEventListener('click', startGame);
+        document.getElementById('replay-button').addEventListener('click', ReturnHome);
+
+        function ReturnHome() {
+            document.getElementById('end-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'none';
+            document.getElementById('start-screen').style.display = 'flex';
+        }
+
+        function startGame() {
+            // Reset game state
+            this.timeRemaining = 60;
+            this.score = 0;
+            this.highScore = 0;
+            this.timeRemaining = 60;
+            this.balloons = null;
+            this.spawnRate = 1000;
+            this.balloonSpeed = 100;
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('end-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'flex';
+            document.getElementById('game-screen').style.opacity = '1';
+            game.scene.start('ColorPopFrenzy'); // Start the game scene
+        }
+    </script>
+</body>
+
+</html>
